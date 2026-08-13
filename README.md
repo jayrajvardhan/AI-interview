@@ -1,74 +1,153 @@
-# AI Interview Platform
+# AI Interview Platform 🎯
 
-This project combines:
+An AI-powered mock interview platform with a **React frontend** and **FastAPI backend**. Supports theoretical Q&A with voice input, coding challenges with in-browser execution, real-time scoring, and a full performance report.
 
-- React frontend for the interview UI
-- Python FastAPI backend for interview logic and API endpoints
-- PostgreSQL-ready database configuration
-- Python data / ML / NLP pipeline
-- Plotly visualizations
-- Streamlit Cloud deployment support
+> **Live Repo:** https://github.com/jayrajvardhan/AI-interview
 
-## Stack
+---
 
-- Frontend: React
-- Backend: Python, FastAPI
-- Database: PostgreSQL
-- Data / ML: Python, Pandas, NumPy, scikit-learn, NLTK
-- Visualization: Plotly
-- Deployment: Streamlit Cloud
+## Features
 
-## Local setup
+- 🎤 Voice-to-text answers (Web Speech API)
+- 💻 In-browser JavaScript code execution
+- 📊 Auto-scoring with TF-IDF similarity + keyword matching
+- 🗄️ SQLite database (zero config, works out of the box)
+- 👤 Student + Admin roles
+- 📋 12 pre-seeded interview questions (Frontend, Backend, Database, System Design, DevOps, ML, Security)
 
-### Frontend
+---
+
+## Tech Stack
+
+| Layer      | Technology                          |
+|------------|-------------------------------------|
+| Frontend   | React 19 + Vite                     |
+| Backend    | Python 3.9+, FastAPI, Uvicorn       |
+| Database   | SQLite (default) / PostgreSQL       |
+| ML / NLP   | scikit-learn, NLTK                  |
+| Analytics  | Streamlit, Plotly                   |
+
+---
+
+## Quick Start (Local)
+
+### 1. Clone the repo
+
+```bash
+git clone https://github.com/jayrajvardhan/AI-interview.git
+cd AI-interview
+```
+
+### 2. Start the Backend
+
+```bash
+cd backend
+
+# Create virtual environment
+python -m venv .venv
+
+# Activate it
+# Windows:
+.venv\Scripts\activate
+# Mac/Linux:
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the server
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Backend will be available at: **http://127.0.0.1:8000**
+API docs at: **http://127.0.0.1:8000/docs**
+
+> The SQLite database (`ai_interview.db`) is created automatically on first run. No PostgreSQL setup needed.
+
+### 3. Start the Frontend
+
+Open a **new terminal** in the project root:
 
 ```bash
 npm install
 npm run dev
 ```
 
-### Backend
+Frontend will be available at: **http://localhost:5173**
+
+---
+
+## Login Credentials
+
+| Role    | Email                  | Password |
+|---------|------------------------|----------|
+| Student | any email              | any text |
+| Admin   | admin@codegian.com     | admin123 |
+
+---
+
+## Environment Variables (Optional)
+
+By default the app uses **SQLite** — no setup needed.
+
+To use **PostgreSQL** instead, copy `.env.example` to `.env` and set:
 
 ```bash
-cd backend
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn main:app --reload
+DATABASE_URL=postgresql://postgres:yourpassword@localhost:5432/ai_interview
 ```
 
-### Streamlit analytics dashboard
+---
 
-```bash
-streamlit run streamlit_app.py
+## API Endpoints
+
+| Method | Endpoint              | Description                     |
+|--------|-----------------------|---------------------------------|
+| GET    | /health               | Health check + DB status        |
+| POST   | /login                | Login or register a user        |
+| GET    | /questions            | Get all questions (auto-seeded) |
+| POST   | /evaluate/theory      | Score a theoretical answer      |
+| POST   | /run/code             | Execute JavaScript/Python code  |
+| POST   | /save-interview       | Save completed interview to DB  |
+| GET    | /interviews           | List all completed interviews   |
+| GET    | /interview/{id}       | Get detailed interview report   |
+
+---
+
+## Project Structure
+
+```
+AI-interview/
+├── backend/
+│   ├── main.py           # FastAPI app + all routes
+│   ├── database.py       # SQLAlchemy models + DB init
+│   └── requirements.txt  # Python dependencies
+├── src/
+│   ├── App.jsx           # Main React component
+│   ├── App.css           # Styles
+│   └── main.jsx          # Entry point
+├── index.html
+├── package.json
+├── vite.config.js
+└── .env.example          # Environment variable template
 ```
 
-### PostgreSQL
+---
 
-Create a PostgreSQL database named `ai_interview` and set the connection string in your environment:
-
-```bash
-export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/ai_interview"
-```
-
-## Deployment
-
-- Frontend can be deployed to Vercel
-- Streamlit dashboard can be deployed to Streamlit Cloud
-- FastAPI backend can be deployed to Render, Railway, or a similar service
-
-Local Docker deployment (example)
-
-1. Copy environment file:
+## Docker (Optional)
 
 ```bash
 cp .env.example .env
-```
-
-2. Start services with Docker Compose:
-
-```bash
 docker compose up --build
 ```
 
-This will start Postgres, the FastAPI backend on port `8000`, and the frontend served via nginx on port `5175`.
+This starts PostgreSQL + FastAPI backend (port 8000) + frontend (port 5175).
+
+---
+
+## Deployment
+
+| Service   | Platform             |
+|-----------|----------------------|
+| Frontend  | Vercel / Netlify     |
+| Backend   | Render / Railway     |
+| Analytics | Streamlit Cloud      |
