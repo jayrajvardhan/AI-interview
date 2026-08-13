@@ -159,8 +159,11 @@ function App() {
     text: '',
     type: 'theoretical',
   })
+  const [viewingAllQuestions, setViewingAllQuestions] = useState(false)
+  const [selectedCategory, setSelectedCategory] = useState('All')
 
   const questionTypeOptions = ['theoretical', 'coding']
+  const categories = ['All', 'Frontend', 'Backend', 'Database', 'System Design', 'DevOps', 'Security', 'ML', 'Algorithms', 'Data']
 
   const stopwords = new Set(['the','is','a','an','and','or','of','in','to','for','on','with','that','this','it','as','are'])
 
@@ -579,6 +582,7 @@ function App() {
         </div>
         <div className="header-actions">
           <div className="timer-pill">{timer}s</div>
+          {isLoggedIn && <button className="secondary-button" onClick={() => setViewingAllQuestions(!viewingAllQuestions)}>Questions</button>}
           <button className="ghost-button" onClick={() => setShowIntro(true)}>Intro</button>
           <button className="primary-button" onClick={() => setIsLoggedIn(false)}>{isLoggedIn ? 'Logout' : 'Login'}</button>
         </div>
@@ -622,6 +626,45 @@ function App() {
                 </div>
                 <small>Admin: admin@codegian.com / admin123</small>
               </form>
+            </section>
+          ) : viewingAllQuestions ? (
+            <section className="questions-list-section">
+              <h2>All Questions Bank</h2>
+              <div className="category-filters">
+                {categories.map(cat => (
+                  <button 
+                    key={cat}
+                    className={`filter-btn ${selectedCategory === cat ? 'active' : ''}`}
+                    onClick={() => setSelectedCategory(cat)}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+              <div className="questions-grid">
+                {defaultQuestions
+                  .filter(q => selectedCategory === 'All' || q.category === selectedCategory)
+                  .map((q) => (
+                    <div key={q.id} className="question-item">
+                      <div className="question-header">
+                        <div className="question-id">Q{q.id}</div>
+                        <div className="question-meta">
+                          <span className="badge category">{q.category}</span>
+                          <span className="badge type">{q.type}</span>
+                          <span className="badge level">L{q.level}</span>
+                        </div>
+                      </div>
+                      <div className="question-body">
+                        <p className="question-text-preview">{q.text}</p>
+                      </div>
+                      <div className="question-footer">
+                        {q.compiler && <span className="compiler-tag">📝 {q.compiler}</span>}
+                        {q.starterCode && <span className="starter-tag">⭐ Has starter code</span>}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+              <button className="secondary-button" onClick={() => setViewingAllQuestions(false)} style={{marginTop: '20px'}}>Back to Interview</button>
             </section>
           ) : (
             <section className="question-stage">

@@ -1,28 +1,38 @@
-import os
+﻿import os
 from typing import List, Optional
-import tempfile
 import subprocess
-import shlex
 import uuid
-import time
+from datetime import datetime
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-DATABASE_URL = os.getenv(
-    'DATABASE_URL',
-    'postgresql://postgres:postgres@localhost:5432/ai_interview',
-)
-
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+from database import engine, SessionLocal, Base, User, Question, Interview, InterviewAnswer, init_db
 
 app = FastAPI(title='AI Interview API', version='1.0.0')
+
+# Initialize database tables on startup
+@app.on_event('startup')
+def startup():
+    """Create database tables on startup"""
+    try:
+        init_db()
+        print("Database initialized successfully!")
+    except Exception as e:
+        print(f"Database already initialized or error: {e}")
+
+# Dependency to get DB session
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 app.add_middleware(
     CORSMiddleware,
@@ -45,7 +55,7 @@ class QuestionItem(BaseModel):
     category: str
     difficulty: str
     text: str
-    compiler: str | None = None
+    compiler: Optional[str] = None
 
 
 class InterviewSubmission(BaseModel):
@@ -95,49 +105,208 @@ def health_check():
 
 
 @app.post('/login')
-def login_user(payload: UserLogin):
+def login_user(payload: UserLogin, db: Session = Depends(get_db)):
     if not payload.name or not payload.email:
         raise HTTPException(status_code=400, detail='Name and email are required.')
+
+    # Check if user exists, if not create
+    user = db.query(User).filter(User.email == payload.email).first()
+    
+    if not user:
+        # Create new user
+        user = User(
+            name=payload.name,
+            email=payload.email,
+            password='default_password',  # In production, hash this
+            role=payload.role
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        print(f"[OK] New user created: {payload.email}")
+    else:
+        print(f"[OK] User logged in: {payload.email}")
 
     return {
         'message': 'Login successful',
         'user': {
-            'name': payload.name,
-            'email': payload.email,
-            'role': payload.role,
+            'id': user.id,
+            'name': user.name,
+            'email': user.email,
+            'role': user.role,
         },
     }
 
 
 @app.get('/questions')
-def get_questions():
-    sample_questions = [
+def get_questions(db: Session = Depends(get_db)):
+    """Get all questions from database, or seed with sample questions if empty"""
+    
+    # Check if questions exist in database
+    existing_questions = db.query(Question).count()
+    
+    if existing_questions == 0:
+        # Seed database with sample questions
+        sample_questions_data = [
+            {
+                'id': 1,
+                'type': 'theoretical',
+                'category': 'Frontend',
+                'level': 1,
+                'difficulty': 'Medium',
+                'text': 'Explain the difference between props and state in React and when you would use each.',
+                'accepted_keywords': ['props', 'state', 'props are', 'state is', 'immutable', 'component'],
+                'compiler': None,
+                'expected_output': None,
+            },
+            {
+                'id': 2,
+                'type': 'coding',
+                'category': 'Frontend',
+                'level': 2,
+                'difficulty': 'Medium',
+                'text': 'Write a JavaScript function that reverses a string without using the reverse() method.',
+                'accepted_keywords': ['function', 'reverse', 'string'],
+                'compiler': 'JavaScript',
+                'expected_output': 'olleh',
+            },
+            {
+                'id': 3,
+                'type': 'theoretical',
+                'category': 'Backend',
+                'level': 3,
+                'difficulty': 'Medium',
+                'text': 'How would you design a REST API endpoint for user login with security best practices?',
+                'accepted_keywords': ['rest', 'endpoint', 'authentication', 'token', 'https', 'validation'],
+                'compiler': None,
+                'expected_output': None,
+            },
+            {
+                'id': 4,
+                'type': 'coding',
+                'category': 'Backend',
+                'level': 4,
+                'difficulty': 'Medium',
+                'text': 'Write a function to check whether a number is prime in JavaScript.',
+                'accepted_keywords': ['prime', 'function', 'check'],
+                'compiler': 'JavaScript',
+                'expected_output': 'true',
+            },
+            {
+                'id': 5,
+                'type': 'theoretical',
+                'category': 'Database',
+                'level': 5,
+                'difficulty': 'Hard',
+                'text': 'Compare relational and distributed data modeling. How would you choose a schema for a system with 10M events per day?',
+                'accepted_keywords': ['relational', 'denormal', 'shard', 'partition', 'schema'],
+                'compiler': None,
+                'expected_output': None,
+            },
+            {
+                'id': 6,
+                'type': 'theoretical',
+                'category': 'System Design',
+                'level': 6,
+                'difficulty': 'Hard',
+                'text': 'Design a scalable interview evaluation platform that captures live speech, stores answers, scores them, and serves actionable analytics in real time.',
+                'accepted_keywords': ['scale', 'stream', 'real time', 'kafka', 'storage', 'analytics'],
+                'compiler': None,
+                'expected_output': None,
+            },
+            {
+                'id': 7,
+                'type': 'coding',
+                'category': 'Frontend',
+                'level': 7,
+                'difficulty': 'Medium',
+                'text': 'Write a function to flatten a nested array by one level in JavaScript.',
+                'accepted_keywords': ['flatten', 'array', 'nested'],
+                'compiler': 'JavaScript',
+                'expected_output': '1 2 3 4',
+            },
+            {
+                'id': 8,
+                'type': 'theoretical',
+                'category': 'DevOps',
+                'level': 8,
+                'difficulty': 'Hard',
+                'text': 'Explain the CI/CD pipeline and why automated testing is important in deployment.',
+                'accepted_keywords': ['ci', 'cd', 'pipeline', 'testing', 'automated', 'deploy'],
+                'compiler': None,
+                'expected_output': None,
+            },
+            {
+                'id': 9,
+                'type': 'coding',
+                'category': 'Algorithms',
+                'level': 9,
+                'difficulty': 'Hard',
+                'text': 'Write a function that returns the nth Fibonacci number efficiently.',
+                'accepted_keywords': ['fibonacci', 'efficient', 'function'],
+                'compiler': 'JavaScript',
+                'expected_output': '13',
+            },
+            {
+                'id': 10,
+                'type': 'theoretical',
+                'category': 'Security',
+                'level': 10,
+                'difficulty': 'Hard',
+                'text': 'What is XSS and how do you prevent it in web applications?',
+                'accepted_keywords': ['xss', 'sanitize', 'escape', 'input', 'content security policy'],
+                'compiler': None,
+                'expected_output': None,
+            },
+            {
+                'id': 11,
+                'type': 'theoretical',
+                'category': 'ML',
+                'level': 11,
+                'difficulty': 'Hard',
+                'text': 'Describe the difference between supervised and unsupervised learning.',
+                'accepted_keywords': ['supervised', 'unsupervised', 'labels', 'clustering', 'regression'],
+                'compiler': None,
+                'expected_output': None,
+            },
+            {
+                'id': 12,
+                'type': 'coding',
+                'category': 'Data',
+                'level': 12,
+                'difficulty': 'Hard',
+                'text': 'Given an array of integers, return the index of the first repeated value.',
+                'accepted_keywords': ['repeated', 'index', 'array'],
+                'compiler': 'JavaScript',
+                'expected_output': '0',
+            },
+        ]
+        
+        # Create and add questions to database
+        for q_data in sample_questions_data:
+            question = Question(**q_data)
+            db.add(question)
+        
+        db.commit()
+        print("[OK] Database seeded with 12 sample questions!")
+    
+    # Get all questions from database
+    questions = db.query(Question).all()
+    
+    return [
         {
-            'id': 1,
-            'type': 'theoretical',
-            'category': 'Frontend',
-            'difficulty': 'Medium',
-            'text': 'Explain the difference between props and state in React and when you would use each.',
-            'compiler': None,
-        },
-        {
-            'id': 2,
-            'type': 'coding',
-            'category': 'Frontend',
-            'difficulty': 'Medium',
-            'text': 'Write a JavaScript function that reverses a string without using reverse().',
-            'compiler': 'JavaScript',
-        },
-        {
-            'id': 3,
-            'type': 'theoretical',
-            'category': 'Backend',
-            'difficulty': 'Medium',
-            'text': 'How would you design a REST API endpoint for user login with security best practices?',
-            'compiler': None,
-        },
+            'id': q.id,
+            'type': q.type,
+            'category': q.category,
+            'difficulty': q.difficulty,
+            'level': q.level,
+            'text': q.text,
+            'compiler': q.compiler,
+            'acceptedKeywords': q.accepted_keywords,
+            'expectedOutput': q.expected_output,
+        }
+        for q in questions
     ]
-    return sample_questions
 
 
 
@@ -254,6 +423,111 @@ def submit_interview(payload: InterviewSubmission):
         'student_name': payload.student_name,
         'score': min(score, 100),
         'answers_received': len(payload.answers),
+    }
+
+
+@app.post('/save-interview')
+def save_interview(payload: InterviewSubmission, db: Session = Depends(get_db)):
+    """Save completed interview and answers to database"""
+    
+    if not payload.student_name or not payload.email:
+        raise HTTPException(status_code=400, detail='Student name and email are required.')
+    
+    try:
+        # Create interview record
+        interview = Interview(
+            student_name=payload.student_name,
+            email=payload.email,
+            status='completed',
+            completed_at=datetime.utcnow()
+        )
+        db.add(interview)
+        db.flush()  # Get the interview ID
+        
+        # Calculate overall score
+        total_score = 0
+        answer_count = 0
+        
+        # Save all answers
+        for answer_data in payload.answers:
+            answer = InterviewAnswer(
+                interview_id=interview.id,
+                question_id=answer_data.get('question_id', 0),
+                answer_text=answer_data.get('answer', ''),
+                is_correct=answer_data.get('is_correct', False),
+                score=answer_data.get('score', 0),
+                feedback=answer_data.get('feedback', '')
+            )
+            db.add(answer)
+            total_score += answer_data.get('score', 0)
+            answer_count += 1
+        
+        # Update interview score
+        interview.overall_score = total_score / answer_count if answer_count > 0 else 0
+        
+        db.commit()
+        db.refresh(interview)
+        
+        print(f"[OK] Interview saved! ID: {interview.id}, Score: {interview.overall_score}")
+        
+        return {
+            'message': 'Interview saved successfully',
+            'interview_id': interview.id,
+            'student_name': payload.student_name,
+            'overall_score': round(interview.overall_score, 2),
+            'answers_saved': answer_count,
+        }
+    
+    except Exception as e:
+        db.rollback()
+        print(f"[ERR] Error saving interview: {e}")
+        raise HTTPException(status_code=500, detail=f'Error saving interview: {str(e)}')
+
+
+@app.get('/interviews')
+def get_interviews(db: Session = Depends(get_db)):
+    """Get all completed interviews"""
+    
+    interviews = db.query(Interview).filter(Interview.status == 'completed').all()
+    
+    return [
+        {
+            'id': interview.id,
+            'student_name': interview.student_name,
+            'email': interview.email,
+            'overall_score': interview.overall_score,
+            'completed_at': interview.completed_at.isoformat() if interview.completed_at else None,
+        }
+        for interview in interviews
+    ]
+
+
+@app.get('/interview/{interview_id}')
+def get_interview_details(interview_id: int, db: Session = Depends(get_db)):
+    """Get detailed report for a specific interview"""
+    
+    interview = db.query(Interview).filter(Interview.id == interview_id).first()
+    if not interview:
+        raise HTTPException(status_code=404, detail='Interview not found')
+    
+    answers = db.query(InterviewAnswer).filter(InterviewAnswer.interview_id == interview_id).all()
+    
+    return {
+        'interview_id': interview.id,
+        'student_name': interview.student_name,
+        'email': interview.email,
+        'overall_score': interview.overall_score,
+        'completed_at': interview.completed_at.isoformat() if interview.completed_at else None,
+        'answers': [
+            {
+                'question_id': answer.question_id,
+                'answer_text': answer.answer_text,
+                'is_correct': answer.is_correct,
+                'score': answer.score,
+                'feedback': answer.feedback,
+            }
+            for answer in answers
+        ]
     }
 
 
